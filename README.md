@@ -2,9 +2,12 @@
 
 Spring Boot + Nginx + MariaDB
 
+<img width="510" height="441" alt="image" src="https://github.com/user-attachments/assets/749697c6-4bf1-4657-9f37-4b2f6dd7df08" />
+
 ---
 
 ## 아키텍처
+
 
 ```
 ┌─────────────────────────────────────────────────────────┐
