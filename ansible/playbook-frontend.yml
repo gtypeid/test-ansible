@@ -2,7 +2,6 @@
 - name: Frontend 서버 구성 (Nginx)
   hosts: frontend
   become: yes
-  # vars 섹션 삭제! all.yml에서 가져옴
 
   tasks:
     - name: 시스템 업데이트
@@ -16,21 +15,20 @@
 
     - name: 웹 루트 디렉토리 생성
       file:
-        path: "{{ web_root }}"  # all.yml에서 가져옴
+        path: "{{ web_root }}"
         state: directory
         owner: www-data
         group: www-data
         mode: '0755'
 
+    # 🔥 synchronize 대신 copy 사용
     - name: Frontend 파일 복사
-      synchronize:
+      copy:
         src: ../frontend/
         dest: "{{ web_root }}/"
-        delete: yes
-        rsync_opts:
-          - "--exclude=.git"
-          - "--exclude=node_modules"
-          - "--exclude=.DS_Store"
+        owner: www-data
+        group: www-data
+        mode: '0644'
       notify: reload nginx
 
     - name: 파일 권한 설정

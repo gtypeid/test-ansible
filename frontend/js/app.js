@@ -3,7 +3,7 @@ async function testAPI() {
     resultEl.textContent = 'Loading...';
 
     try {
-        const response = await fetch('/users');
+        const response = await fetch('/api/users');
         const data = await response.json();
         resultEl.textContent = JSON.stringify(data, null, 2);
     } catch (error) {
