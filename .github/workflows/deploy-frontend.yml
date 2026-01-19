@@ -1,0 +1,20 @@
+name: Deploy Frontend
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip sshpass
+          pip3 install ansible
+      - name: Deploy Frontend
+        working-directory: ./ansible
+        run: ansible-playbook -i inventory.ini playbook-frontend.yml
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: 'False'

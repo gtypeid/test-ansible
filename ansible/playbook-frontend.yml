@@ -1,0 +1,120 @@
+---
+- name: Frontend 서버 구성 (Nginx)
+  hosts: frontend
+  become: yes
+  # vars 섹션 삭제! all.yml에서 가져옴
+
+  tasks:
+    - name: 시스템 업데이트
+      apt:
+        update_cache: yes
+
+    - name: Nginx 설치
+      apt:
+        name: nginx
+        state: present
+
+    - name: 웹 루트 디렉토리 생성
+      file:
+        path: "{{ web_root }}"  # all.yml에서 가져옴
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Frontend 파일 복사
+      synchronize:
+        src: ../frontend/
+        dest: "{{ web_root }}/"
+        delete: yes
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=node_modules"
+          - "--exclude=.DS_Store"
+      notify: reload nginx
+
+    - name: 파일 권한 설정
+      file:
+        path: "{{ web_root }}"
+        owner: www-data
+        group: www-data
+        recurse: yes
+
+    - name: Nginx 설정 파일 생성 (sites-available)
+      copy:
+        content: |
+          server {
+              listen 80;
+              server_name {{ hostvars['web1']['ansible_host'] }};
+          
+              root {{ web_root }};
+              index index.html;
+          
+              location / {
+                  try_files $uri $uri/ /index.html;
+              }
+          
+              location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+                  expires 1y;
+                  add_header Cache-Control "public, immutable";
+              }
+          
+              location /api/ {
+                  proxy_pass http://{{ api_host }}:{{ api_port }}/;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+          
+                  add_header 'Access-Control-Allow-Origin' '*';
+                  add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS';
+                  add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization';
+          
+                  if ($request_method = 'OPTIONS') {
+                      return 204;
+                  }
+              }
+          
+              access_log /var/log/nginx/frontend-access.log;
+              error_log /var/log/nginx/frontend-error.log;
+          }
+        dest: "/etc/nginx/sites-available/{{ site_name }}"
+        mode: '0644'
+      notify: reload nginx
+
+    - name: 기본 사이트 비활성화
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: reload nginx
+
+    - name: Frontend 사이트 활성화
+      file:
+        src: "/etc/nginx/sites-available/{{ site_name }}"
+        dest: "/etc/nginx/sites-enabled/{{ site_name }}"
+        state: link
+      notify: reload nginx
+
+    - name: Nginx 설정 문법 테스트
+      command: nginx -t
+      register: nginx_test
+      changed_when: false
+      failed_when: nginx_test.rc != 0
+
+    - name: 방화벽 HTTP 포트 열기
+      ufw:
+        rule: allow
+        port: 80
+        proto: tcp
+
+    - name: Nginx 시작 및 활성화
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: reload nginx
+      service:
+        name: nginx
+        state: reloaded

@@ -1,0 +1,20 @@
+# Database
+db_host: "192.168.20.194"
+db_name: "testapp"
+db_user: "appuser"
+db_password: "12555!@"
+
+# Backend
+api_host: "192.168.20.193"
+api_port: 8080
+app_name: "testapp-backend"
+app_user: "minb"
+app_dir: "/opt/testapp-backend"
+jar_name: "ansible-back-0.0.1-SNAPSHOT.jar"
+
+# Frontend
+web_root: "/var/www/frontend"
+site_name: "frontend"
+
+# MAC (개발자)
+mac_host: "192.168.20.72"

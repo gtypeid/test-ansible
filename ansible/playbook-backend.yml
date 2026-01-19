@@ -1,0 +1,120 @@
+---
+- name: Backend 서버 구성
+  hosts: backend
+  become: yes
+  # vars 섹션 삭제! all.yml에서 가져옴
+
+  tasks:
+    - name: 시스템 업데이트
+      apt:
+        update_cache: yes
+
+    - name: Java 21 설치
+      apt:
+        name: openjdk-21-jdk
+        state: present
+
+    - name: 앱 디렉토리 생성
+      file:
+        path: "{{ app_dir }}"  # all.yml에서 가져옴
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+
+    - name: GitHub Release API에서 최신 JAR 정보 가져오기
+      uri:
+        url: "https://api.github.com/repos/{{ lookup('env', 'GITHUB_REPOSITORY') }}/releases/tags/latest"
+        return_content: yes
+      register: release_info
+      delegate_to: localhost
+
+    - name: JAR 파일 다운로드
+      get_url:
+        url: "{{ release_info.json.assets[0].browser_download_url }}"
+        dest: "{{ app_dir }}/{{ jar_name }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+        force: yes
+      notify: restart backend
+
+    - name: application.yml 배포
+      copy:
+        content: |
+          spring:
+            datasource:
+              url: jdbc:mariadb://{{ db_host }}:3306/{{ db_name }}
+              username: {{ db_user }}
+              password: {{ db_password }}
+              driver-class-name: org.mariadb.jdbc.Driver
+          
+            jpa:
+              hibernate:
+                ddl-auto: update
+              show-sql: true
+              properties:
+                hibernate:
+                  format_sql: true
+          
+          server:
+            port: {{ api_port }}
+          
+          logging:
+            level:
+              org.springframework: INFO
+              com.test.project: DEBUG
+              org.hibernate.SQL: DEBUG
+              org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+        dest: "{{ app_dir }}/application.yml"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0644'
+      notify: restart backend
+
+    - name: Systemd 서비스 파일 생성
+      copy:
+        content: |
+          [Unit]
+          Description={{ app_name }} Service
+          After=network.target
+          
+          [Service]
+          Type=simple
+          User={{ app_user }}
+          WorkingDirectory={{ app_dir }}
+          ExecStart=/usr/bin/java -jar {{ app_dir }}/{{ jar_name }} --spring.config.location={{ app_dir }}/application.yml
+          SuccessExitStatus=143
+          Restart=on-failure
+          RestartSec=10
+          
+          [Install]
+          WantedBy=multi-user.target
+        dest: "/etc/systemd/system/{{ app_name }}.service"
+        mode: '0644'
+      notify:
+        - reload systemd
+        - restart backend
+
+    - name: 방화벽 8080 포트 열기
+      ufw:
+        rule: allow
+        port: "{{ api_port }}"
+        proto: tcp
+
+    - name: 백엔드 서비스 활성화 및 시작
+      systemd:
+        name: "{{ app_name }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: restart backend
+      systemd:
+        name: "{{ app_name }}"
+        state: restarted

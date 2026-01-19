@@ -1,0 +1,59 @@
+---
+- name: DB 서버 구성
+  hosts: database
+  become: yes
+  tasks:
+    - name: 시스템 업데이트
+      apt:
+        update_cache: yes
+    
+    - name: MariaDB 설치
+      apt:
+        name:
+          - mariadb-server
+          - python3-pymysql
+        state: present
+    
+    - name: MariaDB 시작
+      service:
+        name: mariadb
+        state: started
+        enabled: yes
+    
+    - name: 데이터베이스 생성
+      community.mysql.mysql_db:
+        name: "{{ db_name }}"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+    
+    - name: 앱 사용자 생성
+      community.mysql.mysql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        priv: "{{ db_name }}.*:ALL"
+        host: "{{ hostvars['api1']['ansible_host'] }}"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: 앱 사용자 생성 (개발자 맥)
+      community.mysql.mysql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        priv: "{{ db_name }}.*:ALL"
+        host: "{{ mac_host }}"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: 원격 접속 허용
+      lineinfile:
+        path: /etc/mysql/mariadb.conf.d/50-server.cnf
+        regexp: '^bind-address'
+        line: 'bind-address = 0.0.0.0'
+      notify: restart mariadb
+    
+  
+  handlers:
+    - name: restart mariadb
+      service:
+        name: mariadb
+        state: restarted
